@@ -3,8 +3,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Pitaya (
-  Pitaya.Node, 
-  Pitaya.Path, 
+  Pitaya.Node (..), 
+  Pitaya.Path (..), 
   pitaya
 ) where
 
