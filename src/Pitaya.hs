@@ -17,7 +17,24 @@ module Pitaya (
 -}
 
 import Diagrams.Prelude
-import Diagrams.TwoD.Vector
+    ( translate,
+      (@@),
+      atan2A,
+      cosA,
+      sinA,
+      turn,
+      p2,
+      (#),
+      (^.),
+      (*^),
+      Angle,
+      HasTheta(_theta),
+      HasR(_r),
+      P2,
+      Metric(distance),
+      R1(_x),
+      R2(_y) )  
+import Diagrams.TwoD.Vector ( e )
 
 {-
   A node gives suggestions for how to construct
