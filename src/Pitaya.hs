@@ -1,10 +1,12 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Pitaya (
   Pitaya.Node (..), 
   Pitaya.Path (..), 
+  Pitaya.Pulp (..),
   pitaya
 ) where
 
@@ -32,23 +34,51 @@ data Node = Node {
   2D space.
 -}
 data Path = Edge {
-  node :: Pitaya.Node
+  edgeid :: String
+  , node :: Pitaya.Node
   , eTurns :: Double
   , eRadius :: Double
   , next :: Pitaya.Path
 } | Null
 
+{- 
+  Paths form monoids in pitaya. Null acts as the additive unit,
+  and appendPath is the binary operator.
+-}
+appendPath :: Pitaya.Path -> Pitaya.Path -> Pitaya.Path
+appendPath Null Null = Null
+appendPath p1 Null = p1
+appendPath Null p2 = p2
+appendPath (Edge { .. }) p2 = Edge { 
+  edgeid = edgeid, 
+  node = node, 
+  eTurns = eTurns, 
+  eRadius = eRadius, 
+  next = appendPath next p2 
+} 
+
+instance Semigroup Pitaya.Path where
+  (<>) = appendPath
+
+instance Monoid Pitaya.Path where
+  mempty = Null
+
+data Pulp = Pulp {
+  point :: (P2 Double)
+  , fromPath :: Pitaya.Path
+}
+
 {-
   A concrete node gives instructions for how to
   generate the points that are output by Pitaya.
 -}
-data ConcreteNode = CNode {
+data Seed = Seed {
   pos :: (Double , Angle Double)
   , radiusStart :: Double
   , radiusEnd :: Double
   , turnStart :: Double
   , turnEnd :: Double
-  , fromPath :: Pitaya.Path
+  , cFromPath :: Pitaya.Path
 }
 
 {-
@@ -67,13 +97,16 @@ lerp s1 s2 int = s1 + (int * (s2 - s1))
   Core functions
 -}
 -- Generate points around concrete nodes
-generatePoints :: [ConcreteNode] -> [P2 Double]
-generatePoints [] = []
-generatePoints (n : ns) = foldr 
+generatePulp :: [Seed] -> [Pulp]
+generatePulp [] = []
+generatePulp (n : ns) = foldr 
   (\ n' -> (++) ( 
     [ 
-      fromPolar (Pitaya.lerp (radiusStart n') (radiusEnd n') int , Pitaya.lerp (turnStart n') (turnEnd n') int @@ turn) 
-      # translate (fst (pos n') *^ e (snd (pos n')))
+      Pulp {
+        point = fromPolar (Pitaya.lerp (radiusStart n') (radiusEnd n') int , Pitaya.lerp (turnStart n') (turnEnd n') int @@ turn) 
+          # translate (fst (pos n') *^ e (snd (pos n')))
+        , fromPath = cFromPath n'
+      }
       | int <- [0, 0.01 .. 1] 
     ]
   ))
@@ -84,10 +117,10 @@ generatePoints (n : ns) = foldr
   Walk along the path and generate concrete nodes. This is where much of the complexity lies because
   the placement of each concrete node depends on the placement of the last concrete node.
 -}
-generateConcreteNodes :: Pitaya.Path -> Pitaya.Path -> P2 Double -> Double -> Double -> [ConcreteNode]
-generateConcreteNodes Null _ _ _ _ = []
-generateConcreteNodes edge lastEdge lastCenter lastRadiusEnd lastTurnEnd 
-  = cNode : generateConcreteNodes (next edge) edge nextCenter nextRadiusEnd nextTurnEnd
+generateSeeds :: Pitaya.Path -> Pitaya.Path -> P2 Double -> Double -> Double -> [Seed]
+generateSeeds Null _ _ _ _ = []
+generateSeeds edge lastEdge lastCenter lastRadiusEnd lastTurnEnd 
+  = seed : generateSeeds (next edge) edge nextCenter nextRadiusEnd nextTurnEnd
   where
     -- Place the next node by standing at the last node, turning and then walking forward
     -- the prescribed amount. 
@@ -113,20 +146,20 @@ generateConcreteNodes edge lastEdge lastCenter lastRadiusEnd lastTurnEnd
     nextTurnEnd :: Double
     nextTurnEnd = nextThetaStart ^. turn + nTurns (node edge)
 
-    cNode :: ConcreteNode
-    cNode = CNode {
+    seed :: Seed
+    seed = Seed {
       pos = (nextCenter ^. _r , nextCenter ^. _theta)
       , radiusStart = nextRadiusStart
       , radiusEnd = nextRadiusEnd
       , turnStart = nextThetaStart ^. turn
       , turnEnd = nextTurnEnd
-      , fromPath = edge
+      , cFromPath = edge
     }
 
--- Generate points given a path
-pitaya :: Pitaya.Path -> [P2 Double]
+-- Generate pulp given a path
+pitaya :: Pitaya.Path -> [Pulp]
 pitaya Null = mempty
-pitaya p = generatePoints $ generateConcreteNodes p startEdge startPos startRad startTheta
+pitaya p = generatePulp $ generateSeeds p startEdge startPos startRad startTheta
   where
     startPos :: P2 Double
     startPos = fromPolar (0 , 1 @@ turn)
@@ -139,7 +172,8 @@ pitaya p = generatePoints $ generateConcreteNodes p startEdge startPos startRad 
     -- We "prepend" the path with an empty path
     startEdge :: Pitaya.Path
     startEdge = Edge {
-      node = Node {
+      edgeid = ""
+      , node = Node {
         nRadius = 0
         , nTurns = 0
       }
@@ -147,3 +181,5 @@ pitaya p = generatePoints $ generateConcreteNodes p startEdge startPos startRad 
       , eRadius = 0
       , next = Null
     }
+
+
