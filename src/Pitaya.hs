@@ -7,6 +7,14 @@ module Pitaya (
   Pitaya.Node (..), 
   Pitaya.Path (..), 
   Pitaya.Pulp (..),
+  empte,
+  eId,
+  eTrns,
+  eRds,
+  eNd,
+  rvrs,
+  pathMap,
+  pulpsToPoints,
   pitaya
 ) where
 
@@ -16,25 +24,8 @@ module Pitaya (
   that can be used to draw neat figures.
 -}
 
-import Diagrams.Prelude
-    ( translate,
-      (@@),
-      atan2A,
-      cosA,
-      sinA,
-      turn,
-      p2,
-      (#),
-      (^.),
-      (*^),
-      Angle,
-      HasTheta(_theta),
-      HasR(_r),
-      P2,
-      Metric(distance),
-      R1(_x),
-      R2(_y) )  
-import Diagrams.TwoD.Vector ( e )
+import Diagrams.Prelude hiding(toPath, end)
+import Diagrams.TwoD.Vector
 
 {-
   A node gives suggestions for how to construct
@@ -43,6 +34,12 @@ import Diagrams.TwoD.Vector ( e )
 data Node = Node {
   nRadius :: Double
   , nTurns :: Double
+}
+
+rvrs :: Node -> Node
+rvrs n = Node {
+  nRadius = (nRadius n)
+  , nTurns = - (nTurns n)
 }
 
 {-
@@ -57,6 +54,80 @@ data Path = Edge {
   , eRadius :: Double
   , next :: Pitaya.Path
 } | Null
+
+{-
+   Methods for building and manipulating paths
+-}
+
+-- An empty edge. The idea would be to apply the following
+-- functions to this edge to build up a more complex edge.
+empte :: Pitaya.Path
+empte = Edge {
+  edgeid = ""
+  , node = Node {
+    nRadius = 0
+    , nTurns = 0
+  }
+  , eTurns = 0
+  , eRadius = 0
+  , next = Null
+}
+
+-- Set the id of an edge
+eId :: String -> Pitaya.Path -> Pitaya.Path
+eId id p = Edge {
+  edgeid = id
+  , node = (node p)
+  , eTurns = (eTurns p)
+  , eRadius = (eRadius p)
+  , next = (next p)
+}
+
+-- Set the edge turns for the edge
+eTrns :: Double -> Pitaya.Path -> Pitaya.Path
+eTrns t p = Edge {
+  edgeid = (edgeid p)
+  , node = (node p)
+  , eTurns = t
+  , eRadius = (eRadius p)
+  , next = (next p)
+}
+
+-- Set the radius for the edge
+eRds :: Double -> Pitaya.Path -> Pitaya.Path
+eRds r p = Edge {
+  edgeid = (edgeid p)
+  , node = (node p)
+  , eTurns = (eTurns p)
+  , eRadius = r
+  , next = (next p)
+}
+
+-- Set the node of the edge
+eNd :: Node -> Pitaya.Path -> Pitaya.Path
+eNd n p = Edge {
+  edgeid = (edgeid p)
+  , node = n
+  , eTurns = (eTurns p)
+  , eRadius = (eRadius p)
+  , next = (next p)
+}
+
+eNxt :: Pitaya.Path -> Pitaya.Path -> Pitaya.Path
+eNxt np p = Edge {
+  edgeid = (edgeid p)
+  , node = (node p)
+  , eTurns = (eTurns p)
+  , eRadius = (eRadius p)
+  , next = np
+}
+
+-- Segment a path into a list of edges.
+-- The edges remain connected, so we can traverse
+-- the path like normal.
+pathToList :: Pitaya.Path -> [ Pitaya.Path ]
+pathToList Null = []
+pathToList edge = edge : pathToList (next edge) 
 
 {- 
   Paths form monoids in pitaya. Null acts as the additive unit,
@@ -76,14 +147,23 @@ appendPath (Edge { .. }) p2 = Edge {
 
 instance Semigroup Pitaya.Path where
   (<>) = appendPath
-
+  
 instance Monoid Pitaya.Path where
   mempty = Null
 
+-- Map over a path like you would over a list
+pathMap :: (Pitaya.Path -> Pitaya.Path) -> Pitaya.Path -> Pitaya.Path
+pathMap _ Null = Null
+pathMap f edge = (f edge) # eNxt Null <> pathMap f (next edge)
+    
 data Pulp = Pulp {
-  point :: (P2 Double)
+  point :: P2 Double
   , fromPath :: Pitaya.Path
 }
+
+-- Some utility functions for pulp
+pulpsToPoints :: [Pulp] -> [P2 Double]
+pulpsToPoints = map (\ p -> (point p))
 
 {-
   A concrete node gives instructions for how to
