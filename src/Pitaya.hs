@@ -14,7 +14,6 @@ module Pitaya (
   eNd,
   rvrs,
   pathMap,
-  pulpsToPoints,
   pitaya
 ) where
 
@@ -36,6 +35,7 @@ data Node = Node {
   , nTurns :: Double
 }
 
+-- Reverse the drawing direction of a node
 rvrs :: Node -> Node
 rvrs n = Node {
   nRadius = (nRadius n)
@@ -56,7 +56,8 @@ data Path = Edge {
 } | Null
 
 {-
-   Methods for building and manipulating paths
+  Now, building paths by hand is tedious. So we provide
+  a set of utility functions to help build paths.
 -}
 
 -- An empty edge. The idea would be to apply the following
@@ -113,6 +114,7 @@ eNd n p = Edge {
   , next = (next p)
 }
 
+-- Set the next edge of the edge
 eNxt :: Pitaya.Path -> Pitaya.Path -> Pitaya.Path
 eNxt np p = Edge {
   edgeid = (edgeid p)
@@ -145,6 +147,7 @@ appendPath (Edge { .. }) p2 = Edge {
   next = appendPath next p2 
 } 
 
+-- It turns out that paths form monoids.
 instance Semigroup Pitaya.Path where
   (<>) = appendPath
   
@@ -160,10 +163,6 @@ data Pulp = Pulp {
   point :: P2 Double
   , fromPath :: Pitaya.Path
 }
-
--- Some utility functions for pulp
-pulpsToPoints :: [Pulp] -> [P2 Double]
-pulpsToPoints = map (\ p -> (point p))
 
 {-
   A concrete node gives instructions for how to
