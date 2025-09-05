@@ -3,7 +3,10 @@
 ## An EDSL for drawing using polar coordinates.
 
 ### API
+See `API.md`.
 
+### Prerequisites
+You'll need the [Diagrams](https://diagrams.github.io/) library installed. At least follow the [quick start tutorial](https://diagrams.github.io/doc/quickstart.html) for a run down on how to draw SVGs using Diagrams, at least the section titled "Your first diagram".
 
 ### Tutorial
 #### Drawing with compasses
@@ -54,4 +57,97 @@ Now, we need to do two things:
 
 For part 1, we simply call `pitaya` on the path we created above. Literally, we just need `pitaya path`. This computes to a list of points, which we dub `Pulp`.
 
-Now, for 
+For part 2, we want a function that uses the pulp to decide where and how to draw on the screen. I typically just draw circles centered at the points contained in the pulp, and use the identifier of the `Path` that the pulp comes from to decide the style of the circle. So, something like this:
+
+```haskell
+-- Render points so that points coming from edges labeled "edgeid" are circles
+-- with radius 0.5, or radius 1 otherwise.
+render :: Pulp -> Diagram B
+render p
+  | edgeid (fromPath p) == "edgeid" = circle 0.5
+  | otherwise = circle 1
+```
+
+We now know (mostly) everything we need to know to draw our very first Pitaya drawing! Reading the code below, you might notice that the function `drawAtPoints` has come out of nowhere. This is a function that processes the points from the pulp into containers for Diagram's `Diagram B` values. Effectively, it runs `render` at a location in 2D space. If you want to know more, definitely check out the Diagrams tutorials.
+
+```haskell
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE TypeFamilies              #-}
+
+-- Import requisite diagrams modules
+import Diagrams.Prelude hiding (render)
+import Diagrams.Backend.SVG.CmdLine
+import Pitaya
+
+-- circle
+circlePath :: Pitaya.Path
+circlePath = empte # eNd (Node 10 1)
+
+-- render the points on the circle
+render :: Pulp -> Diagram B
+render p = circle 0.5
+
+-- Draw a diagram at each point designated by the pulp
+drawAtPoints :: (Pulp -> Diagram B) -> [Pulp] -> Diagram B
+drawAtPoints _ [] = mempty
+drawAtPoints f (p : ps) = drawAtPoints f ps <> atPoints [ point p ] (repeat $ f p)
+
+-- Render the points on the circle
+drawing :: Diagram B
+drawing = (drawAtPoints render $ pitaya circlePath)
+
+-- Output the drawing as SVG
+main = mainWith drawing
+```
+
+Your output should be just a circle with circles for points:
+
+<img src="./tutorial-figures/circle/circle.svg">
+
+#### Composing paths
+If you looked at `API.md`, you may have seen that the `Path` datatype implements the `Monoid` typeclass. The takeaway for this is that we can combine paths by using the operator `<>`. We also have a unit for the operator, `mempty`.
+
+So, let's use this to complicate our drawing a little bit.
+
+```haskell
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE TypeFamilies              #-}
+
+-- Import requisite diagrams modules
+import Diagrams.Prelude hiding (render)
+import Diagrams.Backend.SVG.CmdLine
+import Pitaya
+
+-- circle
+circlePath :: Pitaya.Path
+circlePath = empte # eNd (Node 10 1) # eRds 20 # eTrns 0.25
+
+-- spiral
+spiralPath :: Pitaya.Path
+spiralPath = empte # eNd (Node 10 2)
+
+-- render the points on the circle
+render :: Pulp -> Diagram B
+render p = circle 0.5
+
+-- Draw a diagram at each point designated by the pulp
+drawAtPoints :: (Pulp -> Diagram B) -> [Pulp] -> Diagram B
+drawAtPoints _ [] = mempty
+drawAtPoints f (p : ps) = drawAtPoints f ps <> atPoints [ point p ] (repeat $ f p)
+
+-- Render the points on the circle
+drawing :: Diagram B
+drawing = (drawAtPoints render $ pitaya (circlePath <> spiralPath))
+
+-- Output the drawing as SVG
+main = mainWith drawing
+```
+
+You may have noticed that the definition of `circle` is a little bit more complicated, too. What we did here was make it so that the center for the next node is 10 units away at 0.25 turns (counterclockwise). The definition for `spiral` is simple: it's just the old definition for circle. However, we won't get two circles. Instead, what should result is a circle with a spiral directly above it.
+
+<img src="./tutorial-figures/circle-with-spiral/circle-with-sprial.svg">
+
+### More Pitaya
+See [my repository of Pitaya drawings](https://github.com/movinglinguini/pitaya-5-drawings) for more examples!
